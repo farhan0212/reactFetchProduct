@@ -8,39 +8,35 @@ import {
   Tr,
   Thead,
   Tbody,
+  Spinner,
+  Box,
+  Text,
 } from "@chakra-ui/react";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { axiosIstance } from "@/lib/axios";
 
 export default function Home() {
-  const [products, setProducts] = useState([]);
-
-  const fetchProducts = async (req, res) => {
-    try {
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ["repoData"],
+    queryFn: async () => {
       const productResponse = await axiosIstance.get("/products");
-      setProducts(productResponse.data);
-    } catch (error) {
-      console.error(error);
-    }
-  };
+      return productResponse.data; // Return data property
+    },
+  });
 
   const renderProducts = () => {
-    return products.map((product) => {
-      return (
-        <Tr key={product.id}>
-          <Td>{product.id}</Td>
-          <Td>{product.name}</Td>
-          <Td>{product.price}</Td>
-          <Td>{product.description}</Td>
-          <Td>{product.image}</Td>
-        </Tr>
-      );
-    });
+    return data?.map((product) => (
+      <Tr key={product.id}>
+        <Td>{product.id}</Td>
+        <Td>{product.name}</Td>
+        <Td>{product.price}</Td>
+        <Td>{product.description}</Td>
+        <Td>{product.image}</Td>
+      </Tr>
+    ));
   };
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
+  if (isError) return <Text>An error has occurred: {error.message}</Text>;
 
   return (
     <>
@@ -53,18 +49,24 @@ export default function Home() {
       <main>
         <Container>
           <Heading>Hello World</Heading>
-          <Table>
-            <Thead>
-              <Tr>
-                <Th>ID</Th>
-                <Th>Name</Th>
-                <Th>Price</Th>
-                <Th>Description</Th>
-                <Th>image</Th>
-              </Tr>
-            </Thead>
-            <Tbody>{renderProducts()}</Tbody>
-          </Table>
+          {isLoading ? (
+            <Box textAlign="center">
+              <Spinner size="xl" />
+            </Box>
+          ) : (
+            <Table>
+              <Thead>
+                <Tr>
+                  <Th>ID</Th>
+                  <Th>Name</Th>
+                  <Th>Price</Th>
+                  <Th>Description</Th>
+                  <Th>Image</Th>
+                </Tr>
+              </Thead>
+              <Tbody>{renderProducts()}</Tbody>
+            </Table>
+          )}
         </Container>
       </main>
     </>
