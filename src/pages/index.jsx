@@ -16,19 +16,63 @@ import {
   Input,
   VStack,
   Button,
+  useToast,
 } from "@chakra-ui/react";
 import { useFetchProducts } from "@/features/product/useFetchProducts";
 import { useFormik } from "formik";
+import { useMutation } from "@tanstack/react-query";
+import { axiosIstance } from "@/lib/axios";
 
 export default function Home() {
-  const { data, isLoading, isError, error } = useFetchProducts();
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    refetch: refetchProducts,
+  } = useFetchProducts();
+
+  const toast = useToast();
 
   const formik = useFormik({
     initialValues: {
       name: "",
-      price: "",
+      price: parseInt(price),
       description: "",
       image: "",
+    },
+    onSubmit: async () => {
+      const { name, price, description, image } = formik.values;
+
+      mutate({
+        name,
+        price: parseInt(price),
+        description,
+        image,
+      });
+
+      formik.setFieldValue("name", ""),
+        formik.setFieldValue("price", ""),
+        formik.setFieldValue("description", ""),
+        formik.setFieldValue("image", "");
+
+      toast({
+        title: "Product created successfully",
+        description: "The product has been created",
+        status: "success",
+        duration: 5000,
+        isClosable: true,
+      });
+    },
+  });
+
+  const { mutate } = useMutation({
+    mutationFn: async () => {
+      const productsResponse = await axiosIstance.post("/products", {});
+      return productsResponse;
+    },
+    onSuccess: () => {
+      refetchProducts();
     },
   });
 
@@ -79,15 +123,25 @@ export default function Home() {
               <Tbody>{renderProducts()}</Tbody>
             </Table>
           )}
-          <form>
+          <form onSubmit={formik.handleSubmit}>
             <VStack spacing="3">
               <FormControl>
                 <FormLabel>Product Name</FormLabel>
-                <Input onChange={handleFormInput} type="text" name="name" />
+                <Input
+                  onChange={handleFormInput}
+                  type="text"
+                  name="name"
+                  value={formik.values.name}
+                />
               </FormControl>
               <FormControl>
                 <FormLabel>Product price</FormLabel>
-                <Input onChange={handleFormInput} type="text" name="price" />
+                <Input
+                  onChange={handleFormInput}
+                  type="text"
+                  name="price"
+                  value={formik.values.price}
+                />
               </FormControl>
               <FormControl>
                 <FormLabel>Product description</FormLabel>
@@ -95,11 +149,17 @@ export default function Home() {
                   onChange={handleFormInput}
                   type="text"
                   name="description"
+                  value={formik.values.description}
                 />
               </FormControl>
               <FormControl>
                 <FormLabel>Product image</FormLabel>
-                <Input onChange={handleFormInput} type="text" name="image" />
+                <Input
+                  onChange={handleFormInput}
+                  type="text"
+                  name="image"
+                  value={formik.values.image}
+                />
               </FormControl>
               <Button type="submit">Add Product</Button>
             </VStack>
