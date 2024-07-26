@@ -8,5 +8,6 @@ export const useFetchProducts = () => {
       const productResponse = await axiosInstance.get("/products");
       return productResponse.data;
     },
+    queryKey: ["fetch.products"],
   });
 };

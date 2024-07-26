@@ -23,6 +23,8 @@ import { useFormik } from "formik";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { axiosInstance } from "@/lib/axios";
 import * as Yup from "yup";
+import { useDeleteProduct } from "@/features/product/useDeleteProduct";
+import { useEditProduct } from "@/features/product/useEditProduct";
 
 export default function Home() {
   const queryClient = useQueryClient();
@@ -38,6 +40,7 @@ export default function Home() {
 
   const formik = useFormik({
     initialValues: {
+      id: "",
       name: "",
       price: "",
       description: "",
@@ -47,15 +50,22 @@ export default function Home() {
       name: Yup.string().required("Required"),
       price: Yup.number().required("Required").positive("Must be positive"),
       description: Yup.string().required("Required"),
-      image: Yup.string().url("Must be a valid URL").required("Required"),
+      image: Yup.string().required("Required"),
     }),
     onSubmit: (values, { resetForm }) => {
-      mutate(values);
+      if (values.id) {
+        editProduct(values);
+      } else {
+        mutate(values);
+      }
       resetForm();
-
       toast({
-        title: "Product created successfully",
-        description: "The product has been created",
+        title: values.id
+          ? "Product edited successfully"
+          : "Product created successfully",
+        description: values.id
+          ? "The product has been updated"
+          : "The product has been created",
         status: "success",
         duration: 5000,
         isClosable: true,
@@ -89,15 +99,28 @@ export default function Home() {
   });
 
   const { mutate: deleteProduct, isLoading: deleteProductIsLoading } =
-    useMutation({
-      mutationFn: async (id) => {
-        const productsResponse = await axiosInstance.delete(`/products/${id}`);
-        return productsResponse;
+    useDeleteProduct({
+      onSuccess: () => {
+        refetchProducts();
       },
+      onError: (error) => {
+        console.log(error); // Typo fixed
+      },
+    });
+
+  const confirmationDelete = (productId) => {
+    const shouldDelete = confirm("Are you sure you want to delete?");
+    if (shouldDelete) {
+      deleteProduct(productId);
+    }
+  };
+
+  const { mutate: editProduct, isLoading: editProductIsLoading } =
+    useEditProduct({
       onSuccess: () => {
         toast({
-          title: "Product deleted successfully",
-          description: "The product has been deleted",
+          title: "Product edited successfully",
+          description: "The product has been updated",
           status: "success",
           duration: 5000,
           isClosable: true,
@@ -105,22 +128,23 @@ export default function Home() {
         refetchProducts();
       },
       onError: (error) => {
-        console.log(error);
         toast({
           title: "Error",
-          description: `Failed to delete product: ${error.message}`,
+          description: `Failed to edit product: ${error.message}`,
           status: "error",
           duration: 5000,
           isClosable: true,
         });
       },
     });
-
-  const confirmationDelete = (productId) => {
-    const shouldDelete = confirm("Are you sure you want to delete??");
-    if (shouldDelete) {
-      deleteProduct(productId);
-    }
+  const onEditClick = (product) => {
+    formik.setValues({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      description: product.description,
+      image: product.image,
+    });
   };
 
   const renderProducts = () => {
@@ -130,6 +154,14 @@ export default function Home() {
         <Td>{product.name}</Td>
         <Td>{product.price}</Td>
         <Td>{product.description}</Td>
+        <Td>
+          <Button
+            onClick={() => onEditClick(product)}
+            colorScheme="yellow"
+            isLoading={editProductIsLoading}>
+            Edit
+          </Button>
+        </Td>
         <Td>
           <Button
             onClick={() => confirmationDelete(product.id)}
@@ -233,7 +265,7 @@ export default function Home() {
                   <Text color="red.500">{formik.errors.image}</Text>
                 )}
               </FormControl>
-              {createProductIsLoading ? (
+              {createProductIsLoading || editProductIsLoading ? (
                 <Box textAlign="center">
                   <Spinner size="xl" />
                 </Box>
