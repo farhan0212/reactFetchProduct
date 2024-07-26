@@ -20,41 +20,38 @@ import {
 } from "@chakra-ui/react";
 import { useFetchProducts } from "@/features/product/useFetchProducts";
 import { useFormik } from "formik";
-import { useMutation } from "@tanstack/react-query";
-import { axiosIstance } from "@/lib/axios";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { axiosInstance } from "@/lib/axios";
+import * as Yup from "yup";
 
 export default function Home() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
   const {
     data,
-    isLoading,
+    isLoading: productIsLoading,
     isError,
     error,
     refetch: refetchProducts,
   } = useFetchProducts();
 
-  const toast = useToast();
-
   const formik = useFormik({
     initialValues: {
       name: "",
-      price: parseInt(price),
+      price: "",
       description: "",
       image: "",
     },
-    onSubmit: async () => {
-      const { name, price, description, image } = formik.values;
-
-      mutate({
-        name,
-        price: parseInt(price),
-        description,
-        image,
-      });
-
-      formik.setFieldValue("name", ""),
-        formik.setFieldValue("price", ""),
-        formik.setFieldValue("description", ""),
-        formik.setFieldValue("image", "");
+    validationSchema: Yup.object({
+      name: Yup.string().required("Required"),
+      price: Yup.number().required("Required").positive("Must be positive"),
+      description: Yup.string().required("Required"),
+      image: Yup.string().url("Must be a valid URL").required("Required"),
+    }),
+    onSubmit: (values, { resetForm }) => {
+      mutate(values);
+      resetForm();
 
       toast({
         title: "Product created successfully",
@@ -66,18 +63,64 @@ export default function Home() {
     },
   });
 
-  const { mutate } = useMutation({
-    mutationFn: async () => {
-      const productsResponse = await axiosIstance.post("/products", {});
+  const { mutate, isLoading: createProductIsLoading } = useMutation({
+    mutationFn: async (values) => {
+      const { name, price, description, image } = values;
+      const productsResponse = await axiosInstance.post("/products", {
+        name,
+        price: parseInt(price),
+        description,
+        image,
+      });
       return productsResponse;
     },
     onSuccess: () => {
       refetchProducts();
     },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: `Failed to create product: ${error.message}`,
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+    },
   });
 
-  const handleFormInput = (event) => {
-    formik.setFieldValue(event.target.name, event.target.value);
+  const { mutate: deleteProduct, isLoading: deleteProductIsLoading } =
+    useMutation({
+      mutationFn: async (id) => {
+        const productsResponse = await axiosInstance.delete(`/products/${id}`);
+        return productsResponse;
+      },
+      onSuccess: () => {
+        toast({
+          title: "Product deleted successfully",
+          description: "The product has been deleted",
+          status: "success",
+          duration: 5000,
+          isClosable: true,
+        });
+        refetchProducts();
+      },
+      onError: (error) => {
+        console.log(error);
+        toast({
+          title: "Error",
+          description: `Failed to delete product: ${error.message}`,
+          status: "error",
+          duration: 5000,
+          isClosable: true,
+        });
+      },
+    });
+
+  const confirmationDelete = (productId) => {
+    const shouldDelete = confirm("Are you sure you want to delete??");
+    if (shouldDelete) {
+      deleteProduct(productId);
+    }
   };
 
   const renderProducts = () => {
@@ -87,7 +130,14 @@ export default function Home() {
         <Td>{product.name}</Td>
         <Td>{product.price}</Td>
         <Td>{product.description}</Td>
-        <Td>{product.image}</Td>
+        <Td>
+          <Button
+            onClick={() => confirmationDelete(product.id)}
+            colorScheme="red"
+            isLoading={deleteProductIsLoading}>
+            Delete
+          </Button>
+        </Td>
       </Tr>
     ));
   };
@@ -105,7 +155,7 @@ export default function Home() {
       <main>
         <Container>
           <Heading>Hello World</Heading>
-          {isLoading ? (
+          {productIsLoading ? (
             <Box textAlign="center">
               <Spinner size="xl" />
             </Box>
@@ -117,7 +167,7 @@ export default function Home() {
                   <Th>Name</Th>
                   <Th>Price</Th>
                   <Th>Description</Th>
-                  <Th>Image</Th>
+                  <Th>Action</Th>
                 </Tr>
               </Thead>
               <Tbody>{renderProducts()}</Tbody>
@@ -125,43 +175,71 @@ export default function Home() {
           )}
           <form onSubmit={formik.handleSubmit}>
             <VStack spacing="3">
-              <FormControl>
+              <FormControl
+                isInvalid={formik.errors.name && formik.touched.name}>
                 <FormLabel>Product Name</FormLabel>
                 <Input
-                  onChange={handleFormInput}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  value={formik.values.name}
                   type="text"
                   name="name"
-                  value={formik.values.name}
                 />
+                {formik.errors.name && formik.touched.name && (
+                  <Text color="red.500">{formik.errors.name}</Text>
+                )}
               </FormControl>
-              <FormControl>
-                <FormLabel>Product price</FormLabel>
+              <FormControl
+                isInvalid={formik.errors.price && formik.touched.price}>
+                <FormLabel>Product Price</FormLabel>
                 <Input
-                  onChange={handleFormInput}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  value={formik.values.price}
                   type="text"
                   name="price"
-                  value={formik.values.price}
                 />
+                {formik.errors.price && formik.touched.price && (
+                  <Text color="red.500">{formik.errors.price}</Text>
+                )}
               </FormControl>
-              <FormControl>
-                <FormLabel>Product description</FormLabel>
+              <FormControl
+                isInvalid={
+                  formik.errors.description && formik.touched.description
+                }>
+                <FormLabel>Product Description</FormLabel>
                 <Input
-                  onChange={handleFormInput}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  value={formik.values.description}
                   type="text"
                   name="description"
-                  value={formik.values.description}
                 />
+                {formik.errors.description && formik.touched.description && (
+                  <Text color="red.500">{formik.errors.description}</Text>
+                )}
               </FormControl>
-              <FormControl>
-                <FormLabel>Product image</FormLabel>
+              <FormControl
+                isInvalid={formik.errors.image && formik.touched.image}>
+                <FormLabel>Product Image</FormLabel>
                 <Input
-                  onChange={handleFormInput}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  value={formik.values.image}
                   type="text"
                   name="image"
-                  value={formik.values.image}
                 />
+                {formik.errors.image && formik.touched.image && (
+                  <Text color="red.500">{formik.errors.image}</Text>
+                )}
               </FormControl>
-              <Button type="submit">Add Product</Button>
+              {createProductIsLoading ? (
+                <Box textAlign="center">
+                  <Spinner size="xl" />
+                </Box>
+              ) : (
+                <Button type="submit">Add Product</Button>
+              )}
             </VStack>
           </form>
         </Container>
